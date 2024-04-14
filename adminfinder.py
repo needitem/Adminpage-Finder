@@ -1,9 +1,8 @@
 import sys
-import http.client as httplib
-import socket
+import asyncio
+import aiohttp
 from urllib.parse import urljoin
 from urllib.parse import urlparse
-import http
 
 wordfile = open("./wordlist.txt", "r")
 wordlist = wordfile.readlines()
@@ -15,26 +14,35 @@ site = "https://iosddl.net/"
 class AdminFinder:
     def __init__(self):
         print("Admin Finder")
-        self.adminLocate()
+        asyncio.run(self.adminLocate())
 
-    def adminLocate(self):
+    async def adminLocate(self):
         try:
-            for word in wordlist:
-                word = word.strip("\n")
-                admin = "/" + word
-                url = urljoin(site, admin)
-                parsed = urlparse(url)
+            async with aiohttp.ClientSession() as session:
+                tasks = []
+                for word in wordlist:
+                    word = word.strip("\n")
+                    admin = "/" + word
+                    url = urljoin(site, admin)
+                    tasks.append(self.check_admin(session, url))
+                await asyncio.gather(*tasks)
 
-                if parsed.scheme:
-                    connection = http.client.HTTPSConnection(parsed.netloc, timeout=5)
-                else:
-                    connection = http.client.HTTPConnection(parsed.netloc, timeout=5)
+        except KeyboardInterrupt:
+            print("Exiting...")
+            sys.exit()
 
-                connection.request("GET", parsed.path)
-                response = connection.getresponse()
+        except Exception as e:
+            print("Error: " + str(e))
+            pass
 
+    async def check_admin(self, session, url):
+        try:
+            async with session.get(url) as response:
                 if response.status == 200:
                     print("Admin page found: " + url)
+                    f = open("admin.txt", "a")
+                    f.write(url + "\n")
+                    f.close()
 
                 elif response.status == 302:
                     print("Admin page found: " + url)
@@ -47,10 +55,6 @@ class AdminFinder:
 
                 else:
                     print("Error: " + url)
-
-        except KeyboardInterrupt:
-            print("Exiting...")
-            sys.exit()
 
         except Exception as e:
             print("Error: " + str(e))
